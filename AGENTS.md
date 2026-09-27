@@ -7,6 +7,7 @@ Guidance for coding agents (Codex, Claude Code, etc.) working in this repo. See 
 - `client/` — React 18 + Vite web app (Wouter, TanStack Query, Tailwind, shadcn/ui in `client/src/components/ui`)
 - `server/` — Express API
   - `server/app.ts` — `createApp()` builds the Express app; all middleware and routes are registered here
+  - `server/auth.ts` — Clerk middleware and the `requireUser` / `requireAdmin` / `loadManagedNonprofit` checks
   - `server/routes.ts` — API route handlers
   - `server/storage.ts` — database access (Drizzle)
   - `server/index.ts` — local entry only (`npm run dev` / `npm start`); not used on Vercel
@@ -35,7 +36,13 @@ There are no tests. Verify changes with `npm run check` and `npm run build`, and
 - **Schema changes**: edit `shared/schema.ts`, then `npm run db:push`. There is no migrations folder. `.env.local` points at the real Neon database, so review the diff drizzle-kit shows before confirming anything destructive.
 - **Stripe keys on Vercel are live keys**, in both Production and Preview. Never run `stripe trigger` or create test charges against them. Use Stripe test keys in `.env.local` for local work.
 - Stripe API version is pinned to `2025-08-27.basil` in `server/stripeClient.ts`; don't bump it casually.
-- **`/api/admin/*` is protected by a shared password** (`server/adminAuth.ts`, mounted in `server/app.ts`): clients send `Authorization: Bearer <ADMIN_PASSWORD>`, and the client adds it automatically for `/api/admin` URLs via `adminHeaders()` in `client/src/lib/queryClient.ts`. Put new admin-only endpoints under `/api/admin/`. Other endpoints (e.g. nonprofit dashboard actions) have no auth.
+- **Auth is Clerk.** The client sends the Clerk session token as `Authorization: Bearer …` on every API call (`AuthTokenBridge` in `client/src/components/auth.tsx` feeds it to `client/src/lib/queryClient.ts`). On the server:
+  - `requireUser` for anything that needs a signed-in user.
+  - Anything that acts on a nonprofit must go through `loadManagedNonprofit(req, res, id)`, which allows only the owner (`nonprofits.owner_user_id`) or an admin. It sends the 401/403/404 itself; `return` when it gives back `null`.
+  - Everything under `/api/admin/` is guarded by `requireAdmin` in `server/app.ts`. Admins are users with a *verified* email listed in `ADMIN_EMAILS`.
+- **Public responses must go through `toPublicNonprofit()`** (`shared/schema.ts`), and only approved, active nonprofits are public (`isPublic` in `server/routes.ts`). Owners get their full record from `GET /api/me`.
+- Client-writable fields are controlled by `insertNonprofitSchema` / `updatePostSchema`. Never pass `req.body` straight to storage.
+- Client pages that need a user wrap themselves in `<RequireSignIn>`; use `useAccount()` (`client/src/lib/account.ts`) for the current user's `isAdmin` and `nonprofit`.
 
 ## Environment
 
@@ -44,7 +51,8 @@ Local values live in `.env.local` (git-ignored; `vercel env pull .env.local` fet
 - `DATABASE_URL` — Neon Postgres
 - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_WEBHOOK_SECRET` — only needed to process webhooks (`stripe listen --forward-to localhost:5000/api/stripe/webhook` prints one)
-- `ADMIN_PASSWORD` — shared password for `/admin`; admin routes return 503 when unset
+- `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — from the Clerk Marketplace integration (Vite exposes `NEXT_PUBLIC_*` via `envPrefix`)
+- `ADMIN_EMAILS` — comma-separated admin emails
 
 Never commit `.env*` files or print secret values.
 

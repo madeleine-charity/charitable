@@ -12,7 +12,7 @@ export default function DonationSuccess() {
   const params = new URLSearchParams(searchString);
   const sessionId = params.get("session_id");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ status: string; paid: boolean }>({
     queryKey: ["/api/donations/verify", sessionId],
     enabled: !!sessionId,
     refetchInterval: (query) => {

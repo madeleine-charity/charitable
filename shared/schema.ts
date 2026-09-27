@@ -42,6 +42,8 @@ export const nonprofits = pgTable("nonprofits", {
   coverImageUrl: text("cover_image_url"),
   isVerified: boolean("is_verified").default(false),
   isActive: boolean("is_active").default(true),
+  // Clerk user ID of the account that onboarded this nonprofit.
+  ownerUserId: text("owner_user_id").unique(),
   totalRaised: integer("total_raised").default(0),
   donorCount: integer("donor_count").default(0),
   createdAt: timestamp("created_at").defaultNow(),
@@ -53,11 +55,42 @@ export const insertNonprofitSchema = createInsertSchema(nonprofits).omit({
   totalRaised: true,
   donorCount: true,
   stripeConnectedAccountId: true,
+  stripeOnboardingComplete: true,
+  stripeChargesEnabled: true,
+  stripePayoutsEnabled: true,
   isVerified: true,
+  isActive: true,
+  ownerUserId: true,
 });
 
 export type InsertNonprofit = z.infer<typeof insertNonprofitSchema>;
 export type Nonprofit = typeof nonprofits.$inferSelect;
+
+// What anonymous visitors may see: drops payout/Stripe details and ownership.
+export type PublicNonprofit = Omit<
+  Nonprofit,
+  | "bankAccountLast4"
+  | "bankRoutingLast4"
+  | "stripeConnectedAccountId"
+  | "stripeOnboardingComplete"
+  | "stripeChargesEnabled"
+  | "stripePayoutsEnabled"
+  | "ownerUserId"
+>;
+
+export function toPublicNonprofit(nonprofit: Nonprofit): PublicNonprofit {
+  const {
+    bankAccountLast4,
+    bankRoutingLast4,
+    stripeConnectedAccountId,
+    stripeOnboardingComplete,
+    stripeChargesEnabled,
+    stripePayoutsEnabled,
+    ownerUserId,
+    ...rest
+  } = nonprofit;
+  return rest;
+}
 
 export const donations = pgTable("donations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -119,6 +152,11 @@ export const insertPostSchema = createInsertSchema(posts).omit({
   donorCount: true,
   likeCount: true,
 });
+
+// Fields a nonprofit may change on an existing post.
+export const updatePostSchema = insertPostSchema
+  .pick({ title: true, content: true, imageUrl: true, goalAmount: true, isPublished: true })
+  .partial();
 
 export type InsertPost = z.infer<typeof insertPostSchema>;
 export type Post = typeof posts.$inferSelect;

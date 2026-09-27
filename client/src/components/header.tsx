@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { Heart, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { Show, SignInButton, UserButton } from "@clerk/react";
+import { useAccount } from "@/lib/account";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -11,6 +13,24 @@ const navLinks = [
   { href: "/how-it-works", label: "How It Works" },
   { href: "/for-nonprofits", label: "For Nonprofits" },
 ];
+
+function AccountLinks({ onNavigate, className }: { onNavigate?: () => void; className: string }) {
+  const { data: account } = useAccount();
+  return (
+    <>
+      {account?.nonprofit && (
+        <Link href="/nonprofit/dashboard" onClick={onNavigate} className={className} data-testid="link-dashboard">
+          Dashboard
+        </Link>
+      )}
+      {account?.isAdmin && (
+        <Link href="/admin" onClick={onNavigate} className={className} data-testid="link-admin">
+          Admin
+        </Link>
+      )}
+    </>
+  );
+}
 
 export function Header() {
   const [location] = useLocation();
@@ -41,10 +61,21 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <Show when="signed-in">
+            <AccountLinks className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary" />
+          </Show>
         </nav>
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <Button variant="ghost" data-testid="button-sign-in">Sign in</Button>
+            </SignInButton>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
           <Link href="/browse" className="hidden sm:block">
             <Button data-testid="button-start-donating">Start Donating</Button>
           </Link>
@@ -78,6 +109,12 @@ export function Header() {
                 {link.label}
               </Link>
             ))}
+            <Show when="signed-in">
+              <AccountLinks
+                onNavigate={() => setMobileMenuOpen(false)}
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary py-2"
+              />
+            </Show>
             <Link href="/browse" onClick={() => setMobileMenuOpen(false)}>
               <Button className="w-full mt-2" data-testid="button-mobile-start-donating">
                 Start Donating

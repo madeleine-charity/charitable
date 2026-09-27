@@ -1,28 +1,16 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const ADMIN_PASSWORD_KEY = "charitable-admin-password";
+type TokenGetter = () => Promise<string | null>;
+let getAuthToken: TokenGetter | null = null;
 
-// The shared admin password lives in sessionStorage so it's cleared when the tab closes.
-export function getAdminPassword(): string | null {
-  try {
-    return sessionStorage.getItem(ADMIN_PASSWORD_KEY);
-  } catch {
-    return null;
-  }
+// Registered by <AuthTokenBridge> so API calls carry the Clerk session token.
+export function setAuthTokenGetter(getter: TokenGetter | null) {
+  getAuthToken = getter;
 }
 
-export function setAdminPassword(password: string | null) {
-  try {
-    if (password) sessionStorage.setItem(ADMIN_PASSWORD_KEY, password);
-    else sessionStorage.removeItem(ADMIN_PASSWORD_KEY);
-  } catch {
-    // Storage unavailable (e.g. private mode); the user will be asked again.
-  }
-}
-
-export function adminHeaders(url: string): Record<string, string> {
-  const password = url.startsWith("/api/admin") ? getAdminPassword() : null;
-  return password ? { Authorization: `Bearer ${password}` } : {};
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = getAuthToken ? await getAuthToken() : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -41,7 +29,7 @@ export async function apiRequest(
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
-      ...adminHeaders(url),
+      ...(await authHeaders()),
     },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
@@ -59,7 +47,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const url = queryKey.join("/") as string;
     const res = await fetch(url, {
-      headers: adminHeaders(url),
+      headers: await authHeaders(),
       credentials: "include",
     });
 

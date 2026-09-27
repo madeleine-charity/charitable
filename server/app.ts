@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
 import { WebhookHandlers } from "./webhookHandlers.js";
-import { requireAdmin } from "./adminAuth.js";
+import { authMiddleware, requireAdmin } from "./auth.js";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -71,6 +71,7 @@ export function createApp() {
     next();
   });
 
+  app.use(authMiddleware());
   app.use("/api/admin", requireAdmin);
 
   registerRoutes(app);

@@ -68,10 +68,7 @@ function PostCard({ post }: { post: PostWithNonprofit }) {
 
   const likeMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/posts/${post.id}/react`, {
-        method: "POST",
-        body: JSON.stringify({ guestId }),
-      });
+      return apiRequest("POST", `/api/posts/${post.id}/react`, { guestId });
     },
     onMutate: () => {
       setLiked((prev) => !prev);

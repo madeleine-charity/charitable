@@ -7,8 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CheckCircle, AlertCircle, Loader2, ArrowRight, RefreshCw } from "lucide-react";
 import type { Nonprofit } from "@shared/schema";
+import { RequireSignIn } from "@/components/auth";
+import { useAccount } from "@/lib/account";
 
-export default function StripeOnboardingComplete() {
+export default function StripeOnboardingCompletePage() {
+  return (
+    <RequireSignIn title="Sign in to finish connecting your bank account.">
+      <StripeOnboardingComplete />
+    </RequireSignIn>
+  );
+}
+
+function StripeOnboardingComplete() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
@@ -25,10 +35,8 @@ export default function StripeOnboardingComplete() {
     enabled: !!nonprofitId,
   });
 
-  const { data: nonprofit } = useQuery<Nonprofit>({
-    queryKey: ["/api/nonprofits/by-id", nonprofitId],
-    enabled: !!nonprofitId,
-  });
+  const { data: account } = useAccount();
+  const nonprofit = account?.nonprofit;
 
   const isComplete = status?.chargesEnabled && status?.payoutsEnabled;
 
@@ -119,10 +127,10 @@ export default function StripeOnboardingComplete() {
               <div className="flex flex-col gap-3">
                 {isComplete ? (
                   <Button
-                    onClick={() => nonprofit && setLocation(`/nonprofit/${nonprofit.slug}`)}
-                    data-testid="button-view-profile"
+                    onClick={() => setLocation("/nonprofit/dashboard")}
+                    data-testid="button-go-dashboard"
                   >
-                    View Your Profile
+                    Go to Dashboard
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 ) : (
