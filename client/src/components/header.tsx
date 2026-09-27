@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Heart, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/react";
 import { useAccount } from "@/lib/account";
@@ -40,9 +40,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-7xl flex h-16 items-center justify-between gap-4 px-4 md:px-6">
         <Link href="/" className="flex items-center gap-2" data-testid="link-home-logo">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
-            <Heart className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="" className="h-9 w-9 rounded-md bg-white" />
           <span className="text-xl font-semibold">Charitable</span>
         </Link>
 
