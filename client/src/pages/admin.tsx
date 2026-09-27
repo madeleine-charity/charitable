@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -39,7 +39,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { adminHeaders, apiRequest, getAdminPassword, queryClient, setAdminPassword } from "@/lib/queryClient";
 import type { Nonprofit } from "@shared/schema";
 
 interface EINVerification {
@@ -65,7 +65,86 @@ interface EINVerification {
   }>;
 }
 
-export default function AdminDashboard() {
+export default function AdminPage() {
+  const [authed, setAuthed] = useState(() => !!getAdminPassword());
+
+  if (!authed) {
+    return <AdminLogin onSuccess={() => setAuthed(true)} />;
+  }
+
+  return (
+    <AdminDashboard
+      onUnauthorized={() => {
+        setAdminPassword(null);
+        queryClient.removeQueries({ queryKey: ["/api/admin/nonprofits"] });
+        setAuthed(false);
+      }}
+    />
+  );
+}
+
+function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/nonprofits", {
+        headers: { Authorization: `Bearer ${password}` },
+      });
+      if (res.ok) {
+        setAdminPassword(password);
+        onSuccess();
+      } else if (res.status === 401) {
+        setError("Incorrect password.");
+      } else {
+        setError("Admin access is unavailable right now.");
+      }
+    } catch {
+      setError("Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Header />
+      <main className="flex-1 flex items-center justify-center px-4 py-16">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle>Admin sign in</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submit} className="flex flex-col gap-4">
+              <Input
+                type="password"
+                placeholder="Admin password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+                data-testid="input-admin-password"
+              />
+              {error && (
+                <p className="text-sm text-destructive" data-testid="text-admin-error">{error}</p>
+              )}
+              <Button type="submit" disabled={!password || submitting} data-testid="button-admin-login">
+                {submitting ? "Checking..." : "Sign in"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [verifyingEin, setVerifyingEin] = useState<string | null>(null);
@@ -73,9 +152,13 @@ export default function AdminDashboard() {
   const [einDialogOpen, setEinDialogOpen] = useState(false);
   const [selectedNonprofit, setSelectedNonprofit] = useState<Nonprofit | null>(null);
 
-  const { data: nonprofits, isLoading } = useQuery<Nonprofit[]>({
+  const { data: nonprofits, isLoading, error } = useQuery<Nonprofit[]>({
     queryKey: ["/api/admin/nonprofits"],
   });
+
+  useEffect(() => {
+    if (error?.message.startsWith("401")) onUnauthorized();
+  }, [error, onUnauthorized]);
 
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -85,7 +168,8 @@ export default function AdminDashboard() {
       toast({ title: "Nonprofit approved", description: "The nonprofit is now visible on the platform." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/nonprofits"] });
     },
-    onError: () => {
+    onError: (err: Error) => {
+      if (err.message.startsWith("401")) return onUnauthorized();
       toast({ title: "Error", description: "Failed to approve nonprofit.", variant: "destructive" });
     },
   });
@@ -98,7 +182,8 @@ export default function AdminDashboard() {
       toast({ title: "Nonprofit removed", description: "The nonprofit has been removed from the platform." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/nonprofits"] });
     },
-    onError: () => {
+    onError: (err: Error) => {
+      if (err.message.startsWith("401")) return onUnauthorized();
       toast({ title: "Error", description: "Failed to remove nonprofit.", variant: "destructive" });
     },
   });
@@ -110,7 +195,12 @@ export default function AdminDashboard() {
     setEinDialogOpen(true);
     
     try {
-      const response = await fetch(`/api/admin/verify-ein/${nonprofit.taxId}`);
+      const url = `/api/admin/verify-ein/${nonprofit.taxId}`;
+      const response = await fetch(url, { headers: adminHeaders(url) });
+      if (response.status === 401) {
+        setEinDialogOpen(false);
+        return onUnauthorized();
+      }
       const data = await response.json();
       setEinResult(data);
     } catch (error) {
