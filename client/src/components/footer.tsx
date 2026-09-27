@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Lock, Shield } from "lucide-react";
+import { BrandLogo } from "./brand-logo";
 
 export function Footer() {
   return (
@@ -8,7 +9,7 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-4">
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.png" alt="" className="h-8 w-8 rounded-md bg-white" />
+              <BrandLogo className="h-8 w-8" />
               <span className="text-lg font-semibold">Charitable</span>
             </Link>
             <p className="text-sm text-muted-foreground">
