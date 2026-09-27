@@ -34,7 +34,7 @@ A React Native mobile app for donors to discover and support nonprofits through 
    
    Create a `.env` file:
    ```
-   EXPO_PUBLIC_API_URL=https://your-app.replit.app
+   EXPO_PUBLIC_API_URL=https://charitable3.vercel.app
    ```
    
    Replace with your deployed Charitable backend URL.

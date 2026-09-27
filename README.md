@@ -4,16 +4,13 @@
 
 Charitable is a mobile-first social media-style philanthropy platform that connects donors with nonprofits through a scrollable feed. Nonprofits create profiles and post fundraising campaigns that appear in users' feeds. All donations flow directly to nonprofit bank accounts via Stripe Connect destination charges. The platform is designed to be simple enough for non-tech-savvy nonprofits to use.
 
-## User Preferences
-
-Preferred communication style: Simple, everyday language.
-
 ## System Architecture
 
 ### Monorepo Structure
 The project is organized as a monorepo with:
-- `client/` - React web app (runs in Replit)
-- `server/` - Express backend (runs in Replit)
+- `client/` - React web app (Vite, served from Vercel's CDN)
+- `server/` - Express backend (runs as a Vercel Function via `api/index.ts`)
+- `api/` - Vercel Function entry point
 - `shared/` - Database schemas (Drizzle ORM)
 - `apps/mobile/` - React Native mobile app (run locally with Expo)
 - `packages/shared/` - Shared types and API client for mobile
@@ -23,7 +20,7 @@ The project is organized as a monorepo with:
 - **Routing**: Wouter (lightweight React router)
 - **State Management**: TanStack React Query for server state
 - **Styling**: Tailwind CSS with shadcn/ui component library
-- **Build Tool**: Vite with custom plugins for Replit integration
+- **Build Tool**: Vite
 
 The web frontend follows a page-based structure with shared components. Key pages include:
 - Home, Feed, Browse (Discover), How It Works, For Nonprofits (public pages)
@@ -54,7 +51,8 @@ To run the mobile app locally:
 3. `npx expo start` and scan QR with Expo Go app
 
 ### Backend Architecture
-- **Runtime**: Node.js with Express
+- **Runtime**: Node.js 24 with Express
+- **Entry points**: `server/app.ts` builds the Express app; `api/index.ts` exports it as a Vercel Function and `server/index.ts` runs it locally
 - **Language**: TypeScript (ESM modules)
 - **API Style**: RESTful JSON endpoints under `/api/*`
 
@@ -64,7 +62,7 @@ The server handles:
 - Webhook processing for payment confirmation
 
 ### Data Storage
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL (Neon, via the Vercel Marketplace)
 - **ORM**: Drizzle ORM with Zod schema validation
 - **Schema Location**: `shared/schema.ts` (shared between client and server)
 
@@ -78,58 +76,41 @@ Main entities:
 - `reactions` - Likes on posts from supporters or guests
 
 ### Payment Processing
-- **Provider**: Stripe (via Replit connector)
-- **Integration**: `stripe-replit-sync` package for webhook management
+- **Provider**: Stripe (Checkout + Connect destination charges)
 - **Flow**: Stripe Checkout Sessions → Webhook confirmation → Database update
+- **Webhook**: `POST /api/stripe/webhook`, listening for `checkout.session.completed`. Registered once in the Stripe Dashboard/CLI; its signing secret lives in `STRIPE_WEBHOOK_SECRET`.
 
-The Stripe integration automatically handles credential retrieval from Replit connectors and manages webhook endpoints for payment events.
+## Development
 
-## Recent Changes (December 2024)
+1. `npm install`
+2. `vercel link`, then `vercel env pull .env.local` to get `DATABASE_URL`
+3. Add Stripe **test** keys to `.env.local` (`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`). Production keys are marked sensitive on Vercel and aren't pulled.
+4. `npm run dev` — serves the app and API on http://localhost:5000
+5. To receive webhooks locally: `stripe listen --forward-to localhost:5000/api/stripe/webhook`, and put the `whsec_` it prints in `STRIPE_WEBHOOK_SECRET`
 
-**Admin Dashboard & Nonprofit Vetting**
-- Added admin dashboard at /admin for managing nonprofits
-- Three tabs: Pending (awaiting approval), Approved (active on platform), Removed (hidden from users)
-- EIN verification using ProPublica Nonprofit Explorer API to check against IRS 990 filings
-- Shows name match warnings when nonprofit name doesn't match IRS registered name
-- Approve and reject buttons for nonprofit management
-- Only verified (isVerified=true) and active (isActive=true) nonprofits appear in feed and browse pages
-- New API endpoints: GET /api/admin/nonprofits, PATCH /api/admin/nonprofits/:id/approve, PATCH /api/admin/nonprofits/:id/reject, GET /api/admin/verify-ein/:ein
+Schema changes: edit `shared/schema.ts`, then `npm run db:push` (uses `DATABASE_URL` from `.env.local`).
 
-**Social Feed & Posts**
-- Added `posts`, `supporters`, `follows`, and `reactions` tables for social features
-- Created mobile-first scrollable feed page with post cards and like buttons
-- Added post composer for nonprofits in dashboard with title, description, goal amount, and image URL fields
-- Nonprofit profiles now display timeline of their fundraising posts
-- Bottom navigation component for mobile app-like experience
-- Feed API supports pagination with default limit of 20 posts
-- UUID validation on guest reaction endpoints to prevent spoofing
+## Deployment
 
-**Stripe Connect Integration**
-- Nonprofits connect their bank accounts through Stripe Express, ensuring funds go directly to their accounts
-- Onboarding step 3 replaced manual bank detail collection with "Connect with Stripe" button
-- Added destination charges so donations transfer directly to nonprofit Stripe accounts
-- Added Stripe onboarding callback pages (complete, refresh)
-- Fixed Stripe initialization to properly call `runMigrations()`, set up managed webhooks, and run `syncBackfill()`
-- Added webhook route before express.json() middleware for proper payload handling
-- Added `/api/donations/verify/:sessionId` endpoint to verify payment completion
-- New API endpoints for Stripe Connect: create-stripe-account, stripe-onboarding-link, stripe-status
+Hosted on Vercel at https://charitable3.vercel.app. Pushes to `main` deploy to production; other branches get preview deployments. Configuration is in `vercel.json`.
 
 ## External Dependencies
 
 ### Third-Party Services
 - **Stripe**: Payment processing for donations (Checkout, Webhooks)
-- **PostgreSQL**: Primary database (provisioned via Replit)
+- **Vercel**: Hosting (static client + Express as a Vercel Function)
+- **Neon**: PostgreSQL database
 - **Google Fonts**: Inter font family for typography
 
 ### Key NPM Packages
 - `drizzle-orm` / `drizzle-kit`: Database ORM and migrations
-- `stripe` / `stripe-replit-sync`: Payment integration
+- `stripe`: Payment integration
 - `@tanstack/react-query`: Data fetching and caching
 - `@radix-ui/*`: Accessible UI primitives (via shadcn/ui)
 - `wouter`: Client-side routing
 - `zod`: Schema validation shared across client/server
 
-### Environment Requirements
-- `DATABASE_URL`: PostgreSQL connection string
-- Stripe credentials via Replit Connectors (automatic)
-- `REPLIT_DOMAINS`: For webhook URL construction
+### Environment Variables
+- `DATABASE_URL`: PostgreSQL connection string (set by the Neon integration)
+- `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY`: Stripe API keys
+- `STRIPE_WEBHOOK_SECRET`: Signing secret for the `/api/stripe/webhook` endpoint
