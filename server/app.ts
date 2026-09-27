@@ -19,6 +19,10 @@ export function log(message: string, source = "express") {
 export function createApp() {
   const app = express();
 
+  // Vercel terminates TLS at its proxy; trust X-Forwarded-Proto so req.protocol
+  // is "https" there. Stripe live mode rejects http:// redirect URLs.
+  app.set("trust proxy", true);
+
   // Stripe needs the raw body to verify signatures, so this route must be
   // registered before express.json().
   app.post(
