@@ -529,7 +529,7 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
             <div className="py-4">
               {einResult.found ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <div className="flex items-center gap-2 text-primary">
                     <CheckCircle className="h-5 w-5" />
                     <span className="font-medium">Verified 501(c)(3) Organization</span>
                   </div>
