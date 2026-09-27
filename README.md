@@ -114,3 +114,4 @@ Hosted on Vercel at https://charitable3.vercel.app. Pushes to `main` deploy to p
 - `DATABASE_URL`: PostgreSQL connection string (set by the Neon integration)
 - `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY`: Stripe API keys
 - `STRIPE_WEBHOOK_SECRET`: Signing secret for the `/api/stripe/webhook` endpoint
+- `ADMIN_PASSWORD`: Shared password for the `/admin` dashboard and `/api/admin/*` endpoints

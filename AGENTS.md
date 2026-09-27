@@ -35,7 +35,7 @@ There are no tests. Verify changes with `npm run check` and `npm run build`, and
 - **Schema changes**: edit `shared/schema.ts`, then `npm run db:push`. There is no migrations folder. `.env.local` points at the real Neon database, so review the diff drizzle-kit shows before confirming anything destructive.
 - **Stripe keys on Vercel are live keys**, in both Production and Preview. Never run `stripe trigger` or create test charges against them. Use Stripe test keys in `.env.local` for local work.
 - Stripe API version is pinned to `2025-08-27.basil` in `server/stripeClient.ts`; don't bump it casually.
-- `/api/admin/*` endpoints currently have **no authentication**. Don't expose new sensitive endpoints assuming auth exists.
+- **`/api/admin/*` is protected by a shared password** (`server/adminAuth.ts`, mounted in `server/app.ts`): clients send `Authorization: Bearer <ADMIN_PASSWORD>`, and the client adds it automatically for `/api/admin` URLs via `adminHeaders()` in `client/src/lib/queryClient.ts`. Put new admin-only endpoints under `/api/admin/`. Other endpoints (e.g. nonprofit dashboard actions) have no auth.
 
 ## Environment
 
@@ -44,6 +44,7 @@ Local values live in `.env.local` (git-ignored; `vercel env pull .env.local` fet
 - `DATABASE_URL` — Neon Postgres
 - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_WEBHOOK_SECRET` — only needed to process webhooks (`stripe listen --forward-to localhost:5000/api/stripe/webhook` prints one)
+- `ADMIN_PASSWORD` — shared password for `/admin`; admin routes return 503 when unset
 
 Never commit `.env*` files or print secret values.
 
