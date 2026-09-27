@@ -75,6 +75,11 @@ Main entities:
 - `follows` - Relationships between supporters and nonprofits
 - `reactions` - Likes on posts from supporters or guests
 
+### Authentication
+- **Provider**: Clerk (Vercel Marketplace integration)
+- **Nonprofits**: sign in before onboarding; the account that registers a nonprofit owns it (`nonprofits.owner_user_id`) and is the only one who can manage its dashboard, posts and Stripe setup. New nonprofits stay hidden until an admin approves them.
+- **Admins**: any signed-in user whose verified email is in `ADMIN_EMAILS` can use `/admin` to approve or remove nonprofits.
+
 ### Payment Processing
 - **Provider**: Stripe (Checkout + Connect destination charges)
 - **Flow**: Stripe Checkout Sessions → Webhook confirmation → Database update
@@ -114,4 +119,5 @@ Hosted on Vercel at https://charitable3.vercel.app. Pushes to `main` deploy to p
 - `DATABASE_URL`: PostgreSQL connection string (set by the Neon integration)
 - `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY`: Stripe API keys
 - `STRIPE_WEBHOOK_SECRET`: Signing secret for the `/api/stripe/webhook` endpoint
-- `ADMIN_PASSWORD`: Shared password for the `/admin` dashboard and `/api/admin/*` endpoints
+- `CLERK_SECRET_KEY` / `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk auth (set by the Vercel Marketplace integration)
+- `ADMIN_EMAILS`: Comma-separated emails that get admin access (must be verified in Clerk)

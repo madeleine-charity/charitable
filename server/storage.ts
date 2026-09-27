@@ -35,7 +35,8 @@ export interface IStorage {
   getVerifiedNonprofits(): Promise<Nonprofit[]>;
   getNonprofitById(id: string): Promise<Nonprofit | undefined>;
   getNonprofitBySlug(slug: string): Promise<Nonprofit | undefined>;
-  createNonprofit(nonprofit: InsertNonprofit): Promise<Nonprofit>;
+  getNonprofitByOwner(userId: string): Promise<Nonprofit | undefined>;
+  createNonprofit(nonprofit: InsertNonprofit & { ownerUserId: string }): Promise<Nonprofit>;
   updateNonprofitStats(id: string, donationAmount: number): Promise<void>;
   updateNonprofitStripeAccount(id: string, stripeAccountId: string): Promise<void>;
   updateNonprofitStripeStatus(id: string, status: { stripeOnboardingComplete?: boolean; stripeChargesEnabled?: boolean; stripePayoutsEnabled?: boolean }): Promise<void>;
@@ -117,12 +118,17 @@ export class DatabaseStorage implements IStorage {
     return nonprofit || undefined;
   }
 
+  async getNonprofitByOwner(userId: string): Promise<Nonprofit | undefined> {
+    const [nonprofit] = await db.select().from(nonprofits).where(eq(nonprofits.ownerUserId, userId));
+    return nonprofit || undefined;
+  }
+
   async getNonprofitBySlug(slug: string): Promise<Nonprofit | undefined> {
     const [nonprofit] = await db.select().from(nonprofits).where(eq(nonprofits.slug, slug));
     return nonprofit || undefined;
   }
 
-  async createNonprofit(insertNonprofit: InsertNonprofit): Promise<Nonprofit> {
+  async createNonprofit(insertNonprofit: InsertNonprofit & { ownerUserId: string }): Promise<Nonprofit> {
     const [nonprofit] = await db.insert(nonprofits).values(insertNonprofit).returning();
     return nonprofit;
   }

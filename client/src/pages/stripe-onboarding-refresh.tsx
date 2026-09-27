@@ -5,8 +5,17 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { RequireSignIn } from "@/components/auth";
 
-export default function StripeOnboardingRefresh() {
+export default function StripeOnboardingRefreshPage() {
+  return (
+    <RequireSignIn title="Sign in to continue connecting your bank account.">
+      <StripeOnboardingRefresh />
+    </RequireSignIn>
+  );
+}
+
+function StripeOnboardingRefresh() {
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
   const nonprofitId = params.get("id");

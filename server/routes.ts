@@ -1,15 +1,20 @@
 import type { Express } from "express";
 import { storage } from "./storage.js";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient.js";
-import { insertNonprofitSchema, insertDonationSchema, insertPostSchema } from "../shared/schema.js";
+import { insertNonprofitSchema, insertDonationSchema, insertPostSchema, updatePostSchema, toPublicNonprofit, type Nonprofit } from "../shared/schema.js";
+import { getUserId, isAdmin, loadManagedNonprofit, requireUser } from "./auth.js";
 import { z } from "zod";
+
+// Only approved, active nonprofits are visible to the public.
+const isPublic = (nonprofit: Nonprofit | undefined): nonprofit is Nonprofit =>
+  !!nonprofit && !!nonprofit.isVerified && !!nonprofit.isActive;
 
 export function registerRoutes(app: Express): void {
   
   app.get("/api/nonprofits", async (req, res) => {
     try {
       const nonprofits = await storage.getVerifiedNonprofits();
-      res.json(nonprofits);
+      res.json(nonprofits.map(toPublicNonprofit));
     } catch (error: any) {
       console.error("Error fetching nonprofits:", error);
       res.status(500).json({ message: "Failed to fetch nonprofits" });
@@ -21,11 +26,11 @@ export function registerRoutes(app: Express): void {
       const { id } = req.params;
       const nonprofit = await storage.getNonprofitById(id);
       
-      if (!nonprofit) {
+      if (!isPublic(nonprofit)) {
         return res.status(404).json({ message: "Nonprofit not found" });
       }
       
-      res.json(nonprofit);
+      res.json(toPublicNonprofit(nonprofit));
     } catch (error: any) {
       console.error("Error fetching nonprofit by ID:", error);
       res.status(500).json({ message: "Failed to fetch nonprofit" });
@@ -37,11 +42,11 @@ export function registerRoutes(app: Express): void {
       const { slug } = req.params;
       const nonprofit = await storage.getNonprofitBySlug(slug);
       
-      if (!nonprofit) {
+      if (!isPublic(nonprofit)) {
         return res.status(404).json({ message: "Nonprofit not found" });
       }
       
-      res.json(nonprofit);
+      res.json(toPublicNonprofit(nonprofit));
     } catch (error: any) {
       console.error("Error fetching nonprofit:", error);
       res.status(500).json({ message: "Failed to fetch nonprofit" });
@@ -53,7 +58,7 @@ export function registerRoutes(app: Express): void {
       const { slug } = req.params;
       const nonprofit = await storage.getNonprofitBySlug(slug);
       
-      if (!nonprofit) {
+      if (!isPublic(nonprofit)) {
         return res.status(404).json({ message: "Nonprofit not found" });
       }
       
@@ -99,16 +104,50 @@ export function registerRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/nonprofits", async (req, res) => {
+  // The signed-in user's account info and the nonprofit they manage, if any.
+  app.get("/api/me", requireUser, async (req, res) => {
     try {
+      const userId = getUserId(req)!;
+      const [nonprofit, admin] = await Promise.all([
+        storage.getNonprofitByOwner(userId),
+        isAdmin(userId),
+      ]);
+      res.json({ userId, isAdmin: admin, nonprofit: nonprofit ?? null });
+    } catch (error: any) {
+      console.error("Error fetching account:", error);
+      res.status(500).json({ message: "Failed to fetch account" });
+    }
+  });
+
+  // All donations (including pending) for the nonprofit the signed-in user manages.
+  app.get("/api/me/donations", requireUser, async (req, res) => {
+    try {
+      const nonprofit = await storage.getNonprofitByOwner(getUserId(req)!);
+      if (!nonprofit) {
+        return res.status(404).json({ message: "You don't manage a nonprofit" });
+      }
+      res.json(await storage.getDonationsByNonprofitId(nonprofit.id));
+    } catch (error: any) {
+      console.error("Error fetching donations:", error);
+      res.status(500).json({ message: "Failed to fetch donations" });
+    }
+  });
+
+  app.post("/api/nonprofits", requireUser, async (req, res) => {
+    try {
+      const userId = getUserId(req)!;
       const validated = insertNonprofitSchema.parse(req.body);
+
+      if (await storage.getNonprofitByOwner(userId)) {
+        return res.status(409).json({ message: "Your account already manages a nonprofit" });
+      }
       
       const existingNonprofit = await storage.getNonprofitBySlug(validated.slug);
       if (existingNonprofit) {
         return res.status(400).json({ message: "A nonprofit with this name already exists" });
       }
       
-      const nonprofit = await storage.createNonprofit(validated);
+      const nonprofit = await storage.createNonprofit({ ...validated, ownerUserId: userId });
       res.status(201).json(nonprofit);
     } catch (error: any) {
       console.error("Error creating nonprofit:", error);
@@ -128,7 +167,7 @@ export function registerRoutes(app: Express): void {
       }
       
       const nonprofit = await storage.getNonprofitById(nonprofitId);
-      if (!nonprofit) {
+      if (!isPublic(nonprofit)) {
         return res.status(404).json({ message: "Nonprofit not found" });
       }
       
@@ -203,12 +242,8 @@ export function registerRoutes(app: Express): void {
 
   app.post("/api/nonprofits/:id/create-stripe-account", async (req, res) => {
     try {
-      const { id } = req.params;
-      const nonprofit = await storage.getNonprofitById(id);
-      
-      if (!nonprofit) {
-        return res.status(404).json({ message: "Nonprofit not found" });
-      }
+      const nonprofit = await loadManagedNonprofit(req, res, req.params.id);
+      if (!nonprofit) return;
       
       if (nonprofit.stripeConnectedAccountId) {
         return res.json({ accountId: nonprofit.stripeConnectedAccountId });
@@ -253,12 +288,8 @@ export function registerRoutes(app: Express): void {
 
   app.post("/api/nonprofits/:id/stripe-onboarding-link", async (req, res) => {
     try {
-      const { id } = req.params;
-      const nonprofit = await storage.getNonprofitById(id);
-      
-      if (!nonprofit) {
-        return res.status(404).json({ message: "Nonprofit not found" });
-      }
+      const nonprofit = await loadManagedNonprofit(req, res, req.params.id);
+      if (!nonprofit) return;
       
       if (!nonprofit.stripeConnectedAccountId) {
         return res.status(400).json({ message: "No Stripe account. Create one first." });
@@ -283,12 +314,8 @@ export function registerRoutes(app: Express): void {
 
   app.get("/api/nonprofits/:id/stripe-status", async (req, res) => {
     try {
-      const { id } = req.params;
-      const nonprofit = await storage.getNonprofitById(id);
-      
-      if (!nonprofit) {
-        return res.status(404).json({ message: "Nonprofit not found" });
-      }
+      const nonprofit = await loadManagedNonprofit(req, res, req.params.id);
+      if (!nonprofit) return;
       
       if (!nonprofit.stripeConnectedAccountId) {
         return res.json({ 
@@ -374,11 +401,8 @@ export function registerRoutes(app: Express): void {
     try {
       const { nonprofitId } = req.params;
       
-      // Verify nonprofit exists
-      const nonprofit = await storage.getNonprofitById(nonprofitId);
-      if (!nonprofit) {
-        return res.status(404).json({ message: "Nonprofit not found" });
-      }
+      const nonprofit = await loadManagedNonprofit(req, res, nonprofitId);
+      if (!nonprofit) return;
       
       const postData = insertPostSchema.parse({
         ...req.body,
@@ -405,11 +429,16 @@ export function registerRoutes(app: Express): void {
       if (!post) {
         return res.status(404).json({ message: "Post not found" });
       }
+
+      if (!(await loadManagedNonprofit(req, res, post.nonprofitId))) return;
       
-      const updatedPost = await storage.updatePost(id, req.body);
+      const updatedPost = await storage.updatePost(id, updatePostSchema.parse(req.body));
       res.json(updatedPost);
     } catch (error: any) {
       console.error("Error updating post:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid post data", errors: error.errors });
+      }
       res.status(500).json({ message: "Failed to update post" });
     }
   });
@@ -423,6 +452,8 @@ export function registerRoutes(app: Express): void {
       if (!post) {
         return res.status(404).json({ message: "Post not found" });
       }
+
+      if (!(await loadManagedNonprofit(req, res, post.nonprofitId))) return;
       
       await storage.deletePost(id);
       res.status(204).send();

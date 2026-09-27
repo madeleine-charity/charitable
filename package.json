@@ -11,6 +11,8 @@
     "db:push": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs push"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.72",
+    "@clerk/react": "^6.17.2",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",

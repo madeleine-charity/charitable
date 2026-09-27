@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Header } from "@/components/header";
@@ -19,6 +19,8 @@ import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, ArrowRight, Loader2, CheckCircle, Building, FileText, CreditCard, ExternalLink, Shield, AlertCircle } from "lucide-react";
 import { SiStripe } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { RequireSignIn } from "@/components/auth";
+import { useAccount } from "@/lib/account";
 import { useToast } from "@/hooks/use-toast";
 import { nonprofitCategories } from "@shared/schema";
 
@@ -60,24 +62,37 @@ const steps = [
   { title: "Connect Bank", icon: CreditCard },
 ];
 
-export default function NonprofitOnboarding() {
+export default function NonprofitOnboardingPage() {
+  return (
+    <RequireSignIn title="Create an account or sign in to register your nonprofit.">
+      <NonprofitOnboarding />
+    </RequireSignIn>
+  );
+}
+
+function NonprofitOnboarding() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [nonprofitId, setNonprofitId] = useState<string | null>(null);
+  const { data: account } = useAccount();
+
+  // Each account manages one nonprofit; send existing owners to their dashboard.
+  useEffect(() => {
+    if (account?.nonprofit && !nonprofitId) {
+      setLocation("/nonprofit/dashboard");
+    }
+  }, [account, nonprofitId, setLocation]);
 
   const createNonprofit = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/nonprofits", {
-        ...formData,
-        isActive: true,
-      });
+      const res = await apiRequest("POST", "/api/nonprofits", formData);
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/nonprofits"] });
       setNonprofitId(data.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       setCurrentStep(2);
     },
     onError: (error: Error) => {
@@ -194,7 +209,7 @@ export default function NonprofitOnboarding() {
         title: "Registration Complete",
         description: "You can connect your bank account later from your dashboard.",
       });
-      setLocation(`/nonprofit/${formData.slug}`);
+      setLocation("/nonprofit/dashboard");
     }
   };
 

@@ -15,6 +15,7 @@ import DonationSuccess from "@/pages/donation-success";
 import StripeOnboardingComplete from "@/pages/stripe-onboarding-complete";
 import StripeOnboardingRefresh from "@/pages/stripe-onboarding-refresh";
 import Admin from "@/pages/admin";
+import { AuthTokenBridge } from "@/components/auth";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -41,6 +42,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <AuthTokenBridge />
         <Toaster />
         <Router />
       </TooltipProvider>

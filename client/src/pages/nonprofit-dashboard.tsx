@@ -42,9 +42,19 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { RequireSignIn } from "@/components/auth";
+import { useAccount } from "@/lib/account";
 import type { Nonprofit, Donation, Post } from "@shared/schema";
 
-export default function NonprofitDashboard() {
+export default function NonprofitDashboardPage() {
+  return (
+    <RequireSignIn title="Sign in to manage your nonprofit.">
+      <NonprofitDashboard />
+    </RequireSignIn>
+  );
+}
+
+function NonprofitDashboard() {
   const { toast } = useToast();
   const [postDialogOpen, setPostDialogOpen] = useState(false);
   const [postTitle, setPostTitle] = useState("");
@@ -52,14 +62,11 @@ export default function NonprofitDashboard() {
   const [postImageUrl, setPostImageUrl] = useState("");
   const [postGoalAmount, setPostGoalAmount] = useState("");
 
-  const { data: nonprofits, isLoading: nonprofitsLoading } = useQuery<Nonprofit[]>({
-    queryKey: ["/api/nonprofits"],
-  });
-
-  const nonprofit = nonprofits?.[0];
+  const { data: account, isLoading: nonprofitsLoading } = useAccount();
+  const nonprofit = account?.nonprofit ?? undefined;
 
   const { data: donations, isLoading: donationsLoading } = useQuery<Donation[]>({
-    queryKey: ["/api/nonprofits", nonprofit?.slug, "donations"],
+    queryKey: ["/api/me/donations"],
     enabled: !!nonprofit,
   });
 
@@ -70,14 +77,11 @@ export default function NonprofitDashboard() {
 
   const createPostMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/nonprofits/${nonprofit?.id}/posts`, {
-        method: "POST",
-        body: JSON.stringify({
-          title: postTitle,
-          content: postContent,
-          imageUrl: postImageUrl || null,
-          goalAmount: postGoalAmount ? parseInt(postGoalAmount) * 100 : null,
-        }),
+      return apiRequest("POST", `/api/nonprofits/${nonprofit?.id}/posts`, {
+        title: postTitle,
+        content: postContent,
+        imageUrl: postImageUrl || null,
+        goalAmount: postGoalAmount ? parseInt(postGoalAmount) * 100 : null,
       });
     },
     onSuccess: () => {
@@ -97,7 +101,7 @@ export default function NonprofitDashboard() {
 
   const deletePostMutation = useMutation({
     mutationFn: async (postId: string) => {
-      return apiRequest(`/api/posts/${postId}`, { method: "DELETE" });
+      return apiRequest("DELETE", `/api/posts/${postId}`);
     },
     onSuccess: () => {
       toast({ title: "Post deleted", description: "Your post has been removed." });
@@ -181,6 +185,13 @@ export default function NonprofitDashboard() {
 
       <main className="flex-1 py-8">
         <div className="mx-auto max-w-7xl px-4 md:px-6">
+          {(!nonprofit.isVerified || !nonprofit.isActive) && (
+            <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100" data-testid="text-pending-approval">
+              {nonprofit.isActive
+                ? "Your nonprofit is pending review. It will appear in the feed and Discover once our team approves it."
+                : "Your nonprofit has been removed from the platform. Contact us if you think this is a mistake."}
+            </div>
+          )}
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <div>
               <h1 className="text-3xl font-bold" data-testid="text-dashboard-title">
